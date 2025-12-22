@@ -113,3 +113,16 @@ si %>%
   # first_yes_doy == 19; numdays_since_prior_no == 1 (Jan 6th is in the middle
   # of a yes series that overlaps the new year, so it isn't a first yes here)
 
+# IP datasets based the overall start/end dates on "period" but don't provide 
+# any indication of which period a series falls into...
+ipw %>%
+  filter(phenophase_id == 500) %>%
+  select(individual_id, first_yes_year,
+         first_yes_month, first_yes_day, first_yes_julian_date,
+         numdays_since_prior_no,
+         last_yes_year, last_yes_month, last_yes_day) %>%
+  tail(25)
+
+# But, there are no series that start in one water year and extend into the next
+# Chance? Or, are data downloaded and processed by water year?
+count(ipw, first_yes_month, last_yes_month)
