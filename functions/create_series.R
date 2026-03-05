@@ -74,73 +74,91 @@ create_series <- function(start_date = "2009-01-01",
     years = start_extract:end_extract,
     station_ids = site_ids,
     species_ids = species_ids,
-    phenophase_ids = phenophase_ids
+    phenophase_ids = phenophase_ids,
+    additional_fields = "observedby_person_id"
   ) %>% data.frame()
 
-  # Remove unnecssary columns for now and rename to make things easier to view
+  # Remove unnecssary columns for now and rename a few columns
   si <- si_orig %>%
-    select(-c(update_datetime, latitude, longitude, elevation_in_meters,
-              state, genus, species, kingdom, phenophase_description, 
-              abundance_value)) %>%
-    rename(obsid = observation_id,
-           site = site_id, 
-           id = individual_id, 
-           php = phenophase_id, 
-           obsdate = observation_date,
+    select(-c(update_datetime, abundance_value, intensity_category_id, 
+              intensity_value)) %>%
+    rename(person = observedby_person_id,
+           elevation_m = elevation_in_meters,
            doy = day_of_year,
-           status = phenophase_status,
-           intensity_cat = intensity_category_id,
-           intensity = intensity_value)
+           status = phenophase_status)
 
-  # Remove intensity data
-  ser <- si %>%
-    select(-c(intensity_cat, intensity))
-  
   # Arrange by individual, date
-  ser <- ser %>%
-    arrange(common_name, species_id, site, id, obsdate, doy, php, status)
+  si <- si %>%
+    arrange(common_name, species_id, site_id, individual_id, observation_date, 
+            doy, phenophase_id, status)
   
   # Discard observations with unknown status (-1)
-  ser <- ser %>%
+  ser <- si %>%
     filter(status >= 0)
   
-  # For now, will try to create multiple observer flag and conflict flag
-  # If both yes and no reported on same day, assume yes but flag 
-  # that this occurred
-  # Flag if more than one observer on same day, regardless of status
+  # Extract information about each site (to append again later)
+  sites <- ser %>%
+    distinct(site_id, latitude, longitude, elevation_m, state)
+  
+  # Extract information about each species (to append again later)
+  spps <- ser %>%
+    distinct(species_id, genus, species, common_name, kingdom)
+  
+  # Extract information about phenophases (to append again later)
+  phps <- ser %>%
+    distinct(phenophase_id, phenophase_description)
+  
+  # Now, simplify main dataframe by removing this information
   ser <- ser %>%
-    group_by(site, species_id, common_name, id, php, obsdate, doy) %>%
-    summarize(status = max(status),   
-              flag_conflict = ifelse(n_distinct(status) > 1, 1, 0),
-              flag_multobs = ifelse(n() > 1, 1, 0), 
-              .groups = "keep") %>%
+    select(-c(latitude, longitude, elevation_m, state, 
+              genus, species, common_name, kingdom,
+              phenophase_description))
+  
+  # Summarize data for each individual, phenophase, and date; denote where
+  # we have multiple observers and flag status conflicts
+  ser <- ser %>%
+    group_by(site_id, species_id, individual_id, phenophase_id,
+             observation_date, doy) %>%
+    summarize(mult_observer = ifelse(n_distinct(person) > 1, 1, 0),
+              person_id = paste(unique(person), collapse = ","),
+              status_conflict = ifelse(n_distinct(status) == 2, 1, 0),
+              status = max(status),
+              .groups = "drop") %>%
+    mutate(status_conflict_flag = case_when(
+      status_conflict == 1 & mult_observer == 1 ~ "MultiObserver-StatusConflict",
+      status_conflict == 1 & mult_observer == 0 ~ "OneObserver-StatusConflict",
+      status_conflict == 0 ~ NA
+      )) %>%
     data.frame()
   
-  # Add some fake data to test max gap thing...
-  # fake <- data.frame(site = 24702,
+  # # Add some fake data to test max gap thing...
+  # fake <- data.frame(site_id = 24702,
   #                    species_id = 210,
-  #                    common_name = "saguaro",
-  #                    id = 1111111,
-  #                    php = 500,
-  #                    obsdate = ymd(c("2021-02-01", "2021-02-02", "2021-02-05",
-  #                                    "2021-02-06", "2021-08-01", "2021-08-03",
-  #                                    "2021-08-05", "2021-10-01")),
+  #                    individual_id = 1111111,
+  #                    phenophase_id = 500,
+  #                    observation_date = ymd(
+  #                      c("2021-02-01", "2021-02-02", "2021-02-05",
+  #                        "2021-02-06", "2021-08-01", "2021-08-03",
+  #                        "2021-08-05", "2021-10-01")),
   #                    doy = yday(c("2021-02-01", "2021-02-02", "2021-02-05",
   #                                 "2021-02-06", "2021-08-01", "2021-08-03",
   #                                 "2021-08-05", "2021-10-01")),
+  #                    mult_observer = 0,
+  #                    person_id = 99999,
+  #                    status_conflict = 0,
   #                    status = c(0, rep(1, 5), 0, 1),
-  #                    flag_multobs = 0,
-  #                    flag_conflict = 0)
+  #                    status_conflict_flag = 0)
   # ser <- rbind(fake, ser)
   
   # Identify unique combinations of individual plant and phenophase
   combos <- ser %>%
-    distinct(site, species_id, common_name, id, php)
+    distinct(site_id, species_id, individual_id, phenophase_id)
   
   # Loop through each individual-phenophase combination
   for (i in 1:nrow(combos)) {
     ser1 <- ser %>%
-      filter(id == combos$id[i] & php == combos$php[i])
+      filter(individual_id == combos$individual_id[i] & 
+               phenophase_id == combos$phenophase_id[i])
     
     rles <- rle(ser1$status)
     
@@ -159,7 +177,7 @@ create_series <- function(start_date = "2009-01-01",
       mutate(endrow = length + startrow - 1)
     # Extract table with information about each run of 1s (series)
     yesseries <- series01 %>% filter(value == 1) %>%
-      rename(n_yeses = length) %>%
+      rename(series_yeses = length) %>%
       select(-value) %>%
       mutate(lastnorow = ifelse(startrow == 1, NA, startrow - 1)) %>%
       mutate(nextnorow = ifelse(endrow == nrow(ser1), NA, endrow + 1))
@@ -171,19 +189,20 @@ create_series <- function(start_date = "2009-01-01",
       # If there's only one yes in a series, then there is no gap (and no
       # problem). But if there's more than one yes, extract the gaps between
       # consecutive yeses to see if they exceed the user-defined limit
-      if (ys$n_yeses[j] == 1) {
+      if (ys$series_yeses[j] == 1) {
         gaps <- 0
       } else {
-        gaps <- as.numeric(ser1$obsdate[(ys$startrow[j] + 1):ys$endrow[j]] -
-                             ser1$obsdate[ys$startrow[j]:(ys$endrow[j] - 1)]) 
+        gaps <- as.numeric(ser1$observation_date[(ys$startrow[j] + 1):ys$endrow[j]] -
+                             ser1$observation_date[ys$startrow[j]:(ys$endrow[j] - 1)]) 
       }
-      # Identify number of new series that need to be created
+      # Identify new series that need to be created
       newseries <- which(gaps > max_yes_gap)
       
       # If there were consecutive yeses separated by more than the user-defined
       # maximum (max_yes_gap), then create a new series starting at the 2nd yes
       if (length(newseries) == 0) {
         yesseries_new <- ys[j,]
+        yesseries_new$series_split_flag <- 0
       } else {
         yesseries_new <- data.frame(
           startrow = c(ys$startrow[j], ys$startrow[j] + newseries),
@@ -191,7 +210,8 @@ create_series <- function(start_date = "2009-01-01",
           lastnorow = c(ys$lastnorow[j], NA),
           nextnorow = c(NA, ys$nextnorow[j])
         ) %>%
-          mutate(n_yeses = endrow - startrow + 1, .before = startrow)
+          mutate(series_yeses = endrow - startrow + 1, .before = startrow) %>%
+          mutate(series_split_flag = 1)
       }
       
       if (j == 1) {
@@ -201,33 +221,33 @@ create_series <- function(start_date = "2009-01-01",
       }
     }
     
-    yesseries$first_yes_date <- ser1$obsdate[yesseries$startrow]
-    yesseries$last_yes_date <- ser1$obsdate[yesseries$endrow] 
+    yesseries$first_yes_date <- ser1$observation_date[yesseries$startrow]
+    yesseries$last_yes_date <- ser1$observation_date[yesseries$endrow] 
     
     # If there are no prior nos for any yes series, make all prior no dates NA.
     # Otherwise, add in date of prior no
     if (sum(is.na(yesseries$lastnorow)) == nrow(yesseries)) {
       yesseries$prior_no_date <- NA
     } else {
-      yesseries$prior_no_date <- ser1$obsdate[yesseries$lastnorow]
+      yesseries$prior_no_date <- ser1$observation_date[yesseries$lastnorow]
     }
     # If there are no next nos for any yes series, make all next no dates NA.
     # Otherwise, add in date of next No
     if (sum(is.na(yesseries$nextnorow)) == nrow(yesseries)) {
       yesseries$next_no_date <- NA
     } else {
-      yesseries$next_no_date <- ser1$obsdate[yesseries$nextnorow]
+      yesseries$next_no_date <- ser1$observation_date[yesseries$nextnorow]
     }
     
     # Append information about the series
-    yesseries$site <- combos$site[i]
+    yesseries$site_id <- combos$site_id[i]
     yesseries$species_id <- combos$species_id[i]
-    yesseries$common_name <- combos$common_name[i]
-    yesseries$id <- combos$id[i]
-    yesseries$php <- combos$php[i]
+    yesseries$individual_id <- combos$individual_id[i]
+    yesseries$phenophase_id <- combos$phenophase_id[i]
     yesseries <- yesseries %>%
-      select(site, species_id, common_name, id, php, first_yes_date, 
-             prior_no_date, n_yeses, last_yes_date, next_no_date)
+      select(site_id, species_id, individual_id, phenophase_id, first_yes_date, 
+             prior_no_date, series_yeses, last_yes_date, next_no_date,
+             series_split_flag)
     
     if (i == 1) {
       series <- yesseries
@@ -235,7 +255,7 @@ create_series <- function(start_date = "2009-01-01",
       series <- rbind(series, yesseries)
     }
   }
-  
+
   # Only proceed if there are one or more series....
   if (!exists("series")) {
     
@@ -256,41 +276,68 @@ create_series <- function(start_date = "2009-01-01",
       
     } else {
       
-      # Append flags to the series dataset....
-      # If one or more yeses in a series had multiple observers, then flag
-      # If one or more yeses in a series had a conflict, then flag
+      # Append indicators/flags to the series dataset....
+      # If >1 observer contributed yeses to the series, then multiple_observers = 1
+      # If one or more yeses in a series had a status conflict, then flag
+
       flag1 <- ser %>%
         filter(status == 1)
       
       series <- series %>%
-        mutate(flag_multobs = NA,
-               flag_conflict = NA)
+        mutate(multiple_observers = NA,
+               person_id = NA,
+               status_conflict_flag = NA)
       
       for (i in 1:nrow(series)) {
         # Find observation dates in flag1 that fall in series
         flag1sub <- flag1 %>%
-          filter(id == series$id[i] & php == series$php[i]) %>%
-          filter(obsdate >= series$first_yes_date[i] &
-                   obsdate <= series$last_yes_date[i])
-        series$flag_multobs[i] <- sum(flag1sub$flag_multobs)
-        series$flag_conflict[i] <- sum(flag1sub$flag_conflict)
+          filter(individual_id == series$individual_id[i] & 
+                   phenophase_id == series$phenophase_id[i]) %>%
+          filter(observation_date >= series$first_yes_date[i] &
+                   observation_date <= series$last_yes_date[i])
+        
+        observers <- paste0(flag1sub$person_id, collapse = ",")
+        observers <- sort(unique(strsplit(observers, ",")[[1]]))
+        series$multiple_observers[i] <- ifelse(length(observers) == 1, 0, 1)
+        series$person_id[i] <- paste0(observers, collapse = ",")
+        
+        if (all(is.na(flag1sub$status_conflict_flag))) {
+          series$status_conflict_flag[i] <- NA
+        } else {
+          flags <- sort(unique(flag1sub$status_conflict_flag))
+          series$status_conflict_flag[i] <- paste0(flags, collapse = ",")
+        }
       }
+    
+      # Calculate days since prior no, until next no, and series days
       series <- series %>%
-        mutate(flag_multobs = ifelse(flag_multobs > 0, 1, 0),
-               flag_conflict = ifelse(flag_conflict > 0, 1, 0))
+        mutate(days_prior_no = as.numeric(first_yes_date - prior_no_date),
+               days_next_no = as.numeric(next_no_date - last_yes_date),
+               series_days = as.numeric(last_yes_date - first_yes_date) + 1)
       
-      # Calculate days since prior no, until next no
+      # Add in year, DOY, and Julian dates for first, last yes
       series <- series %>%
-        mutate(prior_no = as.numeric(first_yes_date - prior_no_date),
-               next_no = as.numeric(next_no_date - last_yes_date))
+        mutate(first_yes_year = year(first_yes_date),
+               first_yes_doy = yday(first_yes_date),
+               first_yes_julian = julian_date(first_yes_date),
+               last_yes_year = year(last_yes_date),
+               last_yes_doy = yday(last_yes_date),
+               last_yes_julian = julian_date(last_yes_date)) 
       
-      # Add in Julian dates
+      # Add site, species, phenophase information back in and arrange columns
       series <- series %>%
-        mutate(first_yes_julian = julian_date(first_yes_date),
-               prior_no_julian = julian_date(prior_no_date),
-               last_yes_julian = julian_date(last_yes_date),
-               next_no_julian = julian_date(next_no_date))
+        left_join(sites, by = "site_id") %>%
+        left_join(spps, by = "species_id") %>%
+        left_join(phps, by = "phenophase_id")
       
+      series <- series %>%      
+        select(site_id, latitude, longitude, elevation_m, state, species_id,
+               genus, species, common_name, kingdom, individual_id, 
+               phenophase_id, phenophase_description, first_yes_date,
+               first_yes_year, first_yes_julian, prior_no_date, days_prior_no,
+               last_yes_date, last_yes_year, last_yes_julian, next_no_date,
+               days_next_no, series_yeses, series_days, multiple_observers,
+               person_id, status_conflict_flag, series_split_flag)
     }
   }
   
