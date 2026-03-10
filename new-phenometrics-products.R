@@ -39,7 +39,7 @@ year_end <- 2024
 period_start <- "10-01" # "01-01"
 period_end <- "09-30"   # "12-31"
 onset_offset <- "both" # can be "onset", "offset", or "both"
-max_prior_no <- 30
+max_prior_no <- NA
 include_overlap_series <- TRUE
 request_source <- "erinz"
 max_yes_gap <- 90

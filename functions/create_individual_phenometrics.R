@@ -294,6 +294,12 @@ create_individual_phenometrics <- function(
       ip_first <- rbind(ip_first, rows_add_first)
     }
     
+    # Filter by max_prior_no (if not NA)
+    if (!is.na(max_prior_no)) {
+      ip_first <- ip_first %>%
+        filter(days_prior_no <= max_prior_no)
+    }
+    
     # Then find the earliest first yes for each individual, phenophase and
     # period
     ip_first <- ip_first %>%
