@@ -1,16 +1,19 @@
 #' Create series dataset
 #' 
 #' @param start_date date, provided as "YYYY-MM-DD", that indicates the earliest
-#' date an output series begins (default = "2009-01-01")
+#' date an output series ends (default = "2009-01-01")
 #' @param end_date date, provided as "YYYY-MM-DD", that indicates the latest
 #' date an output series begins (default = today's date)
-#' @param requestor character string indicating who is requesting the data
+#' @param request_source character string indicating who is requesting the data
 #' (required)
 #' @param max_yes_gap maximum number of days between consecutive yeses before
 #' the 2nd yes is considered the start of a new series (default = 90).
-#' @param site_ids 
-#' @param species_ids
-#' @param phenophase_ids
+#' @param site_ids vector of NPN site/station IDs. If not specified, will return
+#' series associated with all sites.
+#' @param species_ids vector of NPN species IDs. If not specified, will return
+#' series associated with all species.
+#' @param phenophase_ids vector of NPN phenophse IDs. If not specified, will 
+#' return series associated with all phenophases.
 #'
 #' @details 
 #' 
@@ -59,8 +62,8 @@ create_series <- function(start_date = "2009-01-01",
     stop(function_name, " requires numeric value for max_yes_gap")
   }
   
-  # Extract data from period extending >= 1 year before and after desired periood 
-  # to get proper calculation of prior and following nos ##### KEY STEP ######
+  # Extract data from period extending >= 1 year before and after desired period 
+  # to get proper calculation of prior and subsequent nos ##### KEY STEP ######
   start_date <- ymd(start_date)
   start_yr <- year(start_date)
   start_extract <- start_yr - 1
@@ -68,7 +71,9 @@ create_series <- function(start_date = "2009-01-01",
   end_yr <- year(end_date)
   end_extract <- end_yr + 1
   
-  # Download status-intensity data
+  # Download status-intensity data 
+  ##### Using rnpn for now to simplify things, but will need to access Cached 
+  ##### Observation table in Database via other means eventually
   si_orig <- npn_download_status_data(
     request_source = request_source,
     years = start_extract:end_extract,
