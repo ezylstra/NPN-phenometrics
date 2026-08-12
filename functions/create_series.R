@@ -256,7 +256,7 @@ create_series <- function(start_date = "2009-01-01",
              prior_no_date, series_yeses, last_yes_date, next_no_date,
              series_split_flag)
     
-    if (i == 1) {
+    if (!exists("series")) {
       series <- yesseries
     } else {
       series <- rbind(series, yesseries)
@@ -341,10 +341,11 @@ create_series <- function(start_date = "2009-01-01",
         select(site_id, latitude, longitude, elevation_m, state, species_id,
                genus, species, common_name, kingdom, individual_id, 
                phenophase_id, phenophase_description, first_yes_date,
-               first_yes_year, first_yes_julian, prior_no_date, days_prior_no,
-               last_yes_date, last_yes_year, last_yes_julian, next_no_date,
-               days_next_no, series_yeses, series_days, multiple_observers,
-               person_id, status_conflict_flag, series_split_flag)
+               first_yes_year, first_yes_doy, first_yes_julian, prior_no_date, 
+               days_prior_no, last_yes_date, last_yes_year, last_yes_doy, 
+               last_yes_julian, next_no_date, days_next_no, series_yeses, 
+               series_days, multiple_observers, person_id, status_conflict_flag, 
+               series_split_flag)
     }
   }
   
