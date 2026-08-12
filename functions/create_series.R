@@ -144,14 +144,16 @@ create_series <- function(start_date = "2009-01-01",
   #                    observation_date = ymd(
   #                      c("2021-02-01", "2021-02-02", "2021-02-05",
   #                        "2021-02-06", "2021-08-01", "2021-08-03",
-  #                        "2021-08-05", "2021-10-01")),
+  #                        "2021-08-05", "2021-10-01",
+  #                        "2022-10-01", "2023-06-01", "2023-06-05")),
   #                    doy = yday(c("2021-02-01", "2021-02-02", "2021-02-05",
   #                                 "2021-02-06", "2021-08-01", "2021-08-03",
-  #                                 "2021-08-05", "2021-10-01")),
+  #                                 "2021-08-05", "2021-10-01", 
+  #                                 "2022-10-01", "2023-06-01", "2023-06-05")),
   #                    mult_observer = 0,
   #                    person_id = 99999,
   #                    status_conflict = 0,
-  #                    status = c(0, rep(1, 5), 0, 1),
+  #                    status = c(0, rep(1, 5), 0, rep(1, 3), 0),
   #                    status_conflict_flag = 0)
   # ser <- rbind(fake, ser)
   
@@ -212,8 +214,8 @@ create_series <- function(start_date = "2009-01-01",
         yesseries_new <- data.frame(
           startrow = c(ys$startrow[j], ys$startrow[j] + newseries),
           endrow = c(ys$startrow[j] + newseries - 1, ys$endrow[j]),
-          lastnorow = c(ys$lastnorow[j], NA),
-          nextnorow = c(NA, ys$nextnorow[j])
+          lastnorow = c(ys$lastnorow[j], rep(NA, length(newseries))),
+          nextnorow = c(rep(NA, length(newseries)), ys$nextnorow[j])
         ) %>%
           mutate(series_yeses = endrow - startrow + 1, .before = startrow) %>%
           mutate(series_split_flag = 1)
