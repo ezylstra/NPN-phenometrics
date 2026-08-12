@@ -1,4 +1,4 @@
-#' Create individual phenometrics dataset
+#' Create onset/offset dataset
 #' 
 #' @param year_start numeric year indicating the year that the first "period"
 #' will begin
@@ -311,6 +311,7 @@ create_individual_phenometrics <- function(
                 began_prior = ifelse(sum(began_prior) > 0, 1, 0),
                 .groups = "drop") %>% 
       mutate(metric = "onset", .before = individual_id) %>%
+      mutate(first_yes_doy = yday(first_yes_date), .after = first_yes_date) %>%
       rename(period = first_yes_period) %>%
       data.frame()
   }
@@ -382,6 +383,7 @@ create_individual_phenometrics <- function(
                 ended_after = ifelse(sum(ended_after) > 0, 1, 0),
                 .groups = "drop") %>% 
       mutate(metric = "offset", .before = individual_id) %>%
+      mutate(last_yes_doy = yday(last_yes_date), .after = last_yes_date) %>%
       rename(period = last_yes_period) %>%
       data.frame()
   }  
