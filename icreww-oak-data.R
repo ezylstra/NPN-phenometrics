@@ -186,7 +186,8 @@ oak_combined <- oak_onset %>%
 
 # Calculate time elapsed between first, last yes
 oak_combined <- oak_combined %>%
-  mutate(duration = last_yes_doy - first_yes_doy)
+  mutate(duration = last_yes_doy - first_yes_doy) %>%
+  relocate(n_series, .before = duration)
 
 # Visualize phenophase duration, by year (2020-2026) & phenophase
 ggplot(filter(oak_combined, year(period_start) >= 2020)) +

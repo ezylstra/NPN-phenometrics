@@ -394,7 +394,8 @@ create_individual_phenometrics <- function(
   } else if (onset_offset == "offset") {
     ip <- ip_last
   } else {
-    ip <- bind_rows(ip_first, ip_last)
+    ip <- bind_rows(ip_first, ip_last) %>%
+      relocate(n_series:began_prior, .before = ended_after)
   }
   
   # Add period start/end dates and merge species/site/phenophase information 
@@ -403,7 +404,9 @@ create_individual_phenometrics <- function(
     left_join(select(periods, period_no, period_start, period_end), 
               by = c("period" = "period_no")) %>%
     relocate(period_start:period_end, .after = period) %>%
-    left_join(series_info, by = c("individual_id", "phenophase_id"))
+    left_join(series_info, by = c("individual_id", "phenophase_id")) %>%
+    relocate(site_id:kingdom, .after = individual_id) %>%
+    relocate(phenophase_description, .after = phenophase_id)
     
   return(ip)
 }  

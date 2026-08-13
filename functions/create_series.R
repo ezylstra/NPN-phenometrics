@@ -345,7 +345,8 @@ create_series <- function(start_date = "2009-01-01",
                days_prior_no, last_yes_date, last_yes_year, last_yes_doy, 
                last_yes_julian, next_no_date, days_next_no, series_yeses, 
                series_days, multiple_observers, person_id, status_conflict_flag, 
-               series_split_flag)
+               series_split_flag) %>%
+        relocate(individual_id)
     }
   }
   
